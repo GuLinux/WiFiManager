@@ -1,0 +1,31 @@
+{
+  "name": "WiFiManager",
+  "version": "0.0.1",
+  "description": "WiFi manager based on WiFiMulti. Provides station/accesspoint mode, and ESPAsyncWebServer API for configuration",
+  "keywords": "wifimanager, wifi",
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/GuLinux/WiFiManager"
+  },
+  "authors":
+  [
+    {
+      "name": "Marco Gulino",
+      "email": "marco@gulinux.net",
+      "url": "https://gulinux.net",
+      "maintainer": true
+    }
+  ],
+  "license": "GPLv3",
+  "homepage": "https://github.com/GuLinux/WiFiManager",
+  "dependencies": {
+    "AsyncTCP": "https://github.com/mathieucarbou/AsyncTCP.git#v3.2.4",
+    "ESPAsyncWebServer": "https://github.com/mathieucarbou/ESPAsyncWebServer.git#v3.1.5",
+    "ArduinoJson": "bblanchon/ArduinoJson@^7.2.0",
+    "ArduinoLog": "jsc/ArduinoLog@^1.2.1",
+	  "TaskScheduler": "arkhipenko/TaskScheduler@^3.7.0"
+  },
+  "frameworks": "arduino",
+  "platforms": "expressif32"
+}
