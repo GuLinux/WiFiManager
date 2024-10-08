@@ -25,7 +25,7 @@ public:
         bool empty() const;
         bool open() const;
     };
-    WiFiSettings(Preferences &preferences, FS &fs, const char *defaultHostname="ESP32-", bool appendMacSuffix=true);
+    WiFiSettings(Preferences &preferences, FS &fs, const char *defaultHostname="ESP32", bool appendMacSuffix=true);
     void setup();
     void load();
     void loadDefaults();
