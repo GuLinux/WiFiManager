@@ -1,6 +1,6 @@
 {
   "name": "WiFiManager",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "description": "WiFi manager based on WiFiMulti. Provides station/accesspoint mode, and ESPAsyncWebServer API for configuration",
   "keywords": "wifimanager, wifi",
   "repository":

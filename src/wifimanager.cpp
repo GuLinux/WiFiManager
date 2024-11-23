@@ -13,7 +13,6 @@ GuLinux::WiFiManager &GuLinux::WiFiManager::Instance = *new GuLinux::WiFiManager
 GuLinux::WiFiManager::WiFiManager() : 
     _status{Status::Idle},
     rescanWiFiTask{3'000, TASK_ONCE, std::bind(&WiFiManager::startScanning, this)} {
-    WiFi.onEvent(std::bind(&GuLinux::WiFiManager::onEvent, this, _1, _2));
 }
 
 void GuLinux::WiFiManager::onScanDone(const wifi_event_sta_scan_done_t &scan_done) {
@@ -78,6 +77,7 @@ void GuLinux::WiFiManager::onEvent(arduino_event_id_t event, arduino_event_info_
 
 void GuLinux::WiFiManager::setup(Scheduler &scheduler, WiFiSettings *wifiSettings) {
     Log.traceln(LOG_SCOPE "setup");
+    WiFi.onEvent(std::bind(&GuLinux::WiFiManager::onEvent, this, _1, _2));
     this->wifiSettings = wifiSettings;
     scheduler.addTask(rescanWiFiTask);
 
