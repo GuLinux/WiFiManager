@@ -1,6 +1,6 @@
 {
   "name": "WiFiManager",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "WiFi manager based on WiFiMulti. Provides station/accesspoint mode, and ESPAsyncWebServer API for configuration",
   "keywords": "wifimanager, wifi",
   "repository":
@@ -28,5 +28,7 @@
 	  "TaskScheduler": "arkhipenko/TaskScheduler@^3.7.0"
   },
   "frameworks": "arduino",
-  "platforms": "expressif32"
+  "platforms": [
+      "espressif32"
+  ]
 }
