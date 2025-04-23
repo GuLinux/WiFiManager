@@ -2,7 +2,7 @@
 #include <ArduinoLog.h>
 #include <WiFi.h>
 #include <jsonresponse.h>
-#include <validation.h>
+#include <webvalidation.h>
 
 #define LOG_SCOPE "WiFiManager:"
 
@@ -12,7 +12,7 @@ GuLinux::WiFiManager &GuLinux::WiFiManager::Instance = *new GuLinux::WiFiManager
 
 GuLinux::WiFiManager::WiFiManager() : 
     _status{Status::Idle},
-    rescanWiFiTask{3'000, TASK_ONCE, std::bind(&WiFiManager::startScanning, this)} {
+    rescanWiFiTask{3'000UL, TASK_ONCE, std::bind(&WiFiManager::startScanning, this)} {
 }
 
 void GuLinux::WiFiManager::onScanDone(const wifi_event_sta_scan_done_t &scan_done) {
@@ -183,7 +183,7 @@ void GuLinux::WiFiManager::onGetConfig(AsyncWebServerRequest *request) {
     onGetConfig(rootObject);
 }
 
-void GuLinux::WiFiManager::onGetConfig(JsonObject &responseObject) {
+void GuLinux::WiFiManager::onGetConfig(JsonObject responseObject) {
     responseObject["accessPoint"]["essid"] = wifiSettings->apConfiguration().essid;
     responseObject["accessPoint"]["psk"] = wifiSettings->apConfiguration().psk;
     for(uint8_t i=0; i<WIFIMANAGER_MAX_STATIONS; i++) {
@@ -195,10 +195,15 @@ void GuLinux::WiFiManager::onGetConfig(JsonObject &responseObject) {
 
 void GuLinux::WiFiManager::onGetWiFiStatus(AsyncWebServerRequest *request) {
     JsonResponse response(request);
-    response.root()["wifi"]["status"] = WiFiManager::Instance.statusAsString();
-    response.root()["wifi"]["essid"] = WiFiManager::Instance.essid();
-    response.root()["wifi"]["ip"] = WiFiManager::Instance.ipAddress();
-    response.root()["wifi"]["gateway"] = WiFiManager::Instance.gateway();
+    auto rootObject = response.root().to<JsonObject>();
+    onGetWiFiStatus(rootObject);
+}
+
+void GuLinux::WiFiManager::onGetWiFiStatus(JsonObject responseObject) {
+    responseObject["wifi"]["status"] = WiFiManager::Instance.statusAsString();
+    responseObject["wifi"]["essid"] = WiFiManager::Instance.essid();
+    responseObject["wifi"]["ip"] = WiFiManager::Instance.ipAddress();
+    responseObject["wifi"]["gateway"] = WiFiManager::Instance.gateway();
 }
 
 void GuLinux::WiFiManager::onPostReconnectWiFi(AsyncWebServerRequest *request) {
@@ -209,40 +214,63 @@ void GuLinux::WiFiManager::onPostReconnectWiFi(AsyncWebServerRequest *request) {
 void GuLinux::WiFiManager::onConfigAccessPoint(AsyncWebServerRequest *request, JsonVariant &json) {
     if(request->method() == HTTP_DELETE) {
         Log.traceln(LOG_SCOPE "onConfigAccessPoint: method=%d (%s)", request->method(), request->methodToString());
-        wifiSettings->setAPConfiguration("", "");
+        onDeleteAccessPoint();
     }
     if(request->method() == HTTP_POST) {
-        if(Validation{request, json}.required<const char*>({"essid", "psk"}).notEmpty("essid").invalid()) return;
-
-        String essid = json["essid"];
-        String psk = json["psk"];
-        Log.traceln(LOG_SCOPE "onConfigAccessPoint: essid=%s, psk=%s, method=%d (%s)",
-            essid.c_str(), psk.c_str(), request->method(), request->methodToString());
-        wifiSettings->setAPConfiguration(essid.c_str(), psk.c_str());
-
+        WebValidation validation{request, json};
+        onConfigAccessPoint(validation);
     }
     onGetConfig(request);
 }
 
+void GuLinux::WiFiManager::onConfigAccessPoint(Validation &validation) {
+        validation
+            .required<const char*>({"essid", "psk"})
+            .notEmpty("essid")
+            .ifValid([this](JsonVariant json){
+                String essid = json["essid"];
+                String psk = json["psk"];
+                Log.traceln(LOG_SCOPE "onConfigAccessPoint: essid=%s, psk=%s", essid.c_str(), psk.c_str());
+                wifiSettings->setAPConfiguration(essid.c_str(), psk.c_str());
+            });
 
+}
+
+void GuLinux::WiFiManager::onDeleteAccessPoint() {
+    wifiSettings->setAPConfiguration("", "");
+}
 
 void GuLinux::WiFiManager::onConfigStation(AsyncWebServerRequest *request, JsonVariant &json) {
-    Validation validation{request, json};
-    validation.required<int>("index").range("index", {0}, {WIFIMANAGER_MAX_STATIONS-1});
+    WebValidation validation{request, json};
 
     if(request->method() == HTTP_POST) {
-        validation.required<const char*>({"essid", "psk"}).notEmpty("essid");
+        onConfigStation(validation);
     }
-    if(validation.invalid()) return;
-    int stationIndex = json["index"];
-    String essid = json["essid"];
-    String psk = json["psk"];
-    Log.traceln(LOG_SCOPE "onConfigStation: `%d`, essid=`%s`, psk=`%s`, method=%d (%s)", 
-        stationIndex, essid.c_str(), psk.c_str(), request->method(), request->methodToString());
-    if(request->method() == HTTP_POST) {
-        wifiSettings->setStationConfiguration(stationIndex, essid.c_str(), psk.c_str());
-    } else if(request->method() == HTTP_DELETE) {
-        wifiSettings->setStationConfiguration(stationIndex, "", "");
+    if(request->method() == HTTP_DELETE) {
+        onDeleteStation(validation);
     }
     onGetConfig(request);
+}
+
+void GuLinux::WiFiManager::onConfigStation(Validation &validation) {
+    validation
+        .required<int>("index")
+        .range("index", {0}, {WIFIMANAGER_MAX_STATIONS-1})
+        .required<const char*>({"essid", "psk"}).notEmpty("essid")
+        .ifValid([this](JsonVariant json){
+            int stationIndex = json["index"];
+            String essid = json["essid"];
+            String psk = json["psk"];
+            Log.traceln(LOG_SCOPE "onConfigStation: `%d`, essid=`%s`, psk=`%s`", stationIndex, essid.c_str(), psk.c_str());
+        });
+}
+
+void GuLinux::WiFiManager::onDeleteStation(Validation &validation) {
+    validation
+        .required<int>("index")
+        .range("index", {0}, {WIFIMANAGER_MAX_STATIONS-1})
+        .ifValid([this](JsonVariant json){
+            int stationIndex = json["index"];
+            wifiSettings->setStationConfiguration(stationIndex, "", "");
+        });
 }

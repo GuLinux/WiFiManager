@@ -7,6 +7,7 @@
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
 #include "wifisettings.h"
+#include <validation.h>
 
 #ifndef WIFIMANAGER_MAX_STATIONS
 #define WIFIMANAGER_MAX_STATIONS
@@ -32,11 +33,20 @@ public:
     void addOnConnectedListener(const OnConnectCallback &onConnected);
 
     void onGetConfig(AsyncWebServerRequest *request);
-    void onGetConfig(JsonObject &responseObject);
-    void onPostReconnectWiFi(AsyncWebServerRequest *request);
+    void onGetConfig(JsonObject responseObject);
+
     void onGetWiFiStatus(AsyncWebServerRequest *request);
+    void onGetWiFiStatus(JsonObject responseObject);
+
+    void onPostReconnectWiFi(AsyncWebServerRequest *request);
+    
     void onConfigStation(AsyncWebServerRequest *request, JsonVariant &json);
+    void onConfigStation(Validation &validation);
+    void onDeleteStation(Validation &validation);
+
     void onConfigAccessPoint(AsyncWebServerRequest *request, JsonVariant &json);
+    void onConfigAccessPoint(Validation &validation);
+    void onDeleteAccessPoint();
 
     void setOnConnectedCallback(const std::function<void()> callback) { this->onConnected = callback; }
     void setOnConnectionFailedCallback(const std::function<void()> callback) { this->onConnectionFailed = callback; }
