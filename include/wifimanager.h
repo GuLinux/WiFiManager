@@ -1,8 +1,7 @@
 #ifndef APB_WIFIMANAGER_H
 #define APB_WIFIMANAGER_H
 
-#include <WiFiMulti.h>
-#include <TaskSchedulerDeclarations.h>
+#include <AsyncWiFiMulti.h>
 #include "wifisettings.h"
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
@@ -13,24 +12,22 @@
 #define WIFIMANAGER_MAX_STATIONS
 #endif
 
+
 namespace GuLinux {
 
 class WiFiManager {
 public:
-    using OnConnectCallback = std::function<void()>;
     static WiFiManager &Instance;
     enum Status { Idle, Connecting, Station, AccessPoint, Error };
     WiFiManager();
-    void setup(Scheduler &scheduler, WiFiSettings *wifiSettings);
+    void setup(WiFiSettings *wifiSettings);
     
-    void reconnect() { scheduleReconnect = true; }
+    void reconnect();
     Status status() const { return _status; }
     const char *statusAsString() const;
     String essid() const;
     String ipAddress() const;
     String gateway() const;
-    void loop();
-    void addOnConnectedListener(const OnConnectCallback &onConnected);
 
     void onGetConfig(AsyncWebServerRequest *request);
     void onGetConfig(JsonObject responseObject);
@@ -48,29 +45,29 @@ public:
     void onConfigAccessPoint(Validation &validation);
     void onDeleteAccessPoint();
 
-    void setOnConnectedCallback(const std::function<void()> callback) { this->onConnected = callback; }
-    void setOnConnectionFailedCallback(const std::function<void()> callback) { this->onConnectionFailed = callback; }
-    void setOnNoStationsFoundCallback(const std::function<void()> callback) { this->onNoStationsFound = callback; }
+    void onConfigWiFiManagerSettings(AsyncWebServerRequest *request, JsonVariant &json);
+    void onConfigWiFiManagerSettings(Validation &validation);
+
+    
+    void setOnConnectedCallback(const AsyncWiFiMulti::OnConnected &callback) { this->onConnectedCb = callback; }
+    void setOnConnectionFailedCallback(const AsyncWiFiMulti::OnFailure &callback) { this->onFailureCb = callback; }
+    void setOnDisconnectedCallback(const AsyncWiFiMulti::OnDisconnected &callback) { this->onDisconnectedCb = callback; }
 private:
     GuLinux::WiFiSettings *wifiSettings;
-    WiFiMulti wifiMulti;
+    AsyncWiFiMulti wifiMulti;
     Status _status;
-    bool scheduleReconnect = false;
     bool connectionFailed = false;
-    Task rescanWiFiTask;
-    std::list<OnConnectCallback> onConnectedCallbacks;
 
-    std::function<void()> onConnected;
-    std::function<void()> onConnectionFailed;
-    std::function<void()> onNoStationsFound;
+    void onConnected(const AsyncWiFiMulti::ApSettings &apSettings);
+    void onDisconnected(const char *ssid, uint8_t disconnectionReason);
+    void onFailure();
 
+    AsyncWiFiMulti::OnConnected onConnectedCb;
+    AsyncWiFiMulti::OnDisconnected onDisconnectedCb;
+    AsyncWiFiMulti::OnFailure onFailureCb;
 
-
-    void connect();
     void setApMode();
-    void onEvent(arduino_event_id_t event, arduino_event_info_t info);
-    void onScanDone(const wifi_event_sta_scan_done_t &scan_done);
-    void startScanning();
+    uint8_t retries = 0;
 };
 }
 #endif
