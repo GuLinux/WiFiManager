@@ -56,7 +56,7 @@ private:
     GuLinux::WiFiSettings *wifiSettings;
     AsyncWiFiMulti wifiMulti;
     Status _status;
-    bool connectionFailed = false;
+    void connect();
 
     void onConnected(const AsyncWiFiMulti::ApSettings &apSettings);
     void onDisconnected(const char *ssid, uint8_t disconnectionReason);
