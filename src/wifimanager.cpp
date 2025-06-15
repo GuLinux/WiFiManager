@@ -15,7 +15,8 @@ GuLinux::WiFiManager::WiFiManager() : _status{Status::Idle} {}
 
 
 void GuLinux::WiFiManager::setup(WiFiSettings *wifiSettings) {
-    Log.traceln(LOG_SCOPE "setup");
+    Log.traceln(LOG_SCOPE "setup: retries=%d, reconnectOnDisconnect=%s",
+            wifiSettings->retries(), wifiSettings->reconnectOnDisconnect() ? "true" : "false");
     this->wifiSettings = wifiSettings;
 
     WiFi.setHostname(wifiSettings->hostname());
