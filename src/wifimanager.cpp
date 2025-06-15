@@ -63,6 +63,7 @@ void GuLinux::WiFiManager::onFailure() {
     Log.warningln(LOG_SCOPE "Unable to connect to WiFi stations");
     if(retries < wifiSettings->retries() || wifiSettings->retries() < 0) {
         Log.warningln(LOG_SCOPE "Retrying connection (%d/%d)", retries++, wifiSettings->retries());
+        reconnect();
     } else {
         Log.warningln(LOG_SCOPE "Max retries reached, switching to Access Point mode");
         setApMode();
