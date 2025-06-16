@@ -8,6 +8,9 @@
 #define WIFIMANAGER_KEY_STATION_X_ESSID "station_%d_essid"
 #define WIFIMANAGER_KEY_STATION_X_PSK "station_%d_psk"
 
+#define RETRIES_KEY "conn_retries"
+#define RECONNECT_ON_DISCONNECT_KEY "conn_reconnect"
+
 #include <functional>
 using namespace std::placeholders;
 
@@ -53,7 +56,8 @@ void GuLinux::WiFiSettings::load() {
     if(std::none_of(_stations.begin(), _stations.end(), std::bind(&WiFiStation::valid, _1))) {
         loadDefaultStations();
     }
-
+    _retries = preferences.getInt(RETRIES_KEY, WIFIMANAGER_DEFAULT_RETRIES);
+    _reconnectOnDisconnect = preferences.getBool(RECONNECT_ON_DISCONNECT_KEY, WIFIMANAGER_DEFAULT_RECONNECT);
 }
 
 void GuLinux::WiFiSettings::loadDefaults() {
@@ -68,6 +72,8 @@ void GuLinux::WiFiSettings::loadDefaults() {
     }
     memset(_apConfiguration.psk, 0, WIFIMANAGER_MAX_ESSID_PSK_SIZE);
     // Log.traceln(LOG_SCOPE "Using default ESSID: `%s`", _apConfiguration.essid);
+    _retries = WIFIMANAGER_DEFAULT_RETRIES;
+    _reconnectOnDisconnect = WIFIMANAGER_DEFAULT_RECONNECT;
     loadDefaultStations();
 }
 
@@ -107,6 +113,8 @@ void GuLinux::WiFiSettings::save() {
         runOnFormatKey(WIFIMANAGER_KEY_STATION_X_PSK, i, [this, i](const char *key) { preferences.putString(key, _stations[i].psk); });
     }
     // Log.infoln(LOG_SCOPE "Preferences saved");
+    preferences.putInt(RETRIES_KEY, _retries);
+    preferences.putBool(RECONNECT_ON_DISCONNECT_KEY, _reconnectOnDisconnect);
 }
 
 
@@ -136,4 +144,20 @@ bool GuLinux::WiFiSettings::hasStation(const String &essid) const {
 
 bool GuLinux::WiFiSettings::hasValidStations() const {
     return std::any_of(_stations.begin(), _stations.end(), std::bind(&GuLinux::WiFiSettings::WiFiStation::valid, _1));
+}
+
+int16_t GuLinux::WiFiSettings::retries() const {
+    return _retries;
+}
+
+void GuLinux::WiFiSettings::setRetries(int16_t retries) {
+    _retries = retries;
+}
+
+bool GuLinux::WiFiSettings::reconnectOnDisconnect() const {
+    return _reconnectOnDisconnect;
+}
+
+void GuLinux::WiFiSettings::setReconnectOnDisconnect(bool reconnectOnDisconnect) {
+    _reconnectOnDisconnect = reconnectOnDisconnect;
 }

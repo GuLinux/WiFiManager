@@ -10,76 +10,14 @@ using namespace std::placeholders;
 
 GuLinux::WiFiManager &GuLinux::WiFiManager::Instance = *new GuLinux::WiFiManager();
 
-GuLinux::WiFiManager::WiFiManager() : 
-    _status{Status::Idle},
-    rescanWiFiTask{3'000UL, TASK_ONCE, std::bind(&WiFiManager::startScanning, this)} {
-}
+GuLinux::WiFiManager::WiFiManager() : _status{Status::Idle} {}
 
-void GuLinux::WiFiManager::onScanDone(const wifi_event_sta_scan_done_t &scan_done) {
-    bool success = scan_done.status == 0;
-    Log.traceln(LOG_SCOPE "[EVENT] Scan done: success=%d, APs found: %d, scheduleReconnect=%d, connectionFailed=%d", success, scan_done.number, scheduleReconnect, connectionFailed);
-    if(success) {
-        for(uint8_t i=0; i<scan_done.number; i++) {
-            Log.traceln(LOG_SCOPE "[EVENT] AP[%d]: ESSID=%s, channel: %d, RSSI: %d", i, WiFi.SSID(i), WiFi.channel(i), WiFi.RSSI(i));
-        }
-        if(!connectionFailed) {
-            return;
-        }
-        for(uint8_t i=0; i<scan_done.number; i++) {
-            if(wifiSettings->hasStation(WiFi.SSID(i))) {
-                Log.infoln(LOG_SCOPE "[EVENT] Found at least one AP from configuration, scheduling reconnection");
-                scheduleReconnect = true;
-                return;
-            } else {
-                Log.infoln(LOG_SCOPE "[EVENT] No known APs found, scheduling rescan");
-                rescanWiFiTask.enable();
-            }
-        }
-    }
-}
 
-void GuLinux::WiFiManager::startScanning() {
-    WiFi.scanNetworks(true);
-}
 
-void GuLinux::WiFiManager::onEvent(arduino_event_id_t event, arduino_event_info_t info) {
-    switch(event) {
-        case(ARDUINO_EVENT_WIFI_SCAN_DONE):
-            onScanDone(info.wifi_scan_done);
-            break;
-        case(ARDUINO_EVENT_WIFI_AP_START):
-            _status = Status::AccessPoint;
-            Log.infoln(LOG_SCOPE "[EVENT] Access Point started");
-            break;
-        case(ARDUINO_EVENT_WIFI_STA_CONNECTED):
-            Log.infoln(LOG_SCOPE "[EVENT] Connected to station `%s`, channel %d",
-                reinterpret_cast<char*>(info.wifi_sta_connected.ssid),
-                info.wifi_sta_connected.channel);
-            _status = Status::Station;
-            std::for_each(onConnectedCallbacks.begin(), onConnectedCallbacks.end(), std::bind(&OnConnectCallback::operator(), _1));
-            break;
-        case(ARDUINO_EVENT_WIFI_STA_DISCONNECTED):
-        case(ARDUINO_EVENT_WIFI_STA_STOP):
-            Log.infoln(LOG_SCOPE "[EVENT] WiFi disconnected: SSID=%s, reason=%d",
-                reinterpret_cast<char*>(info.wifi_sta_disconnected.ssid),
-                info.wifi_sta_disconnected.reason);
-            _status = Status::Idle;
-            scheduleReconnect = true;
-            break;
-        case(ARDUINO_EVENT_WIFI_AP_STOP):
-            Log.infoln(LOG_SCOPE "[EVENT] WiFi AP stopped");
-            _status = Status::Idle;
-            break;
-        default:
-            Log.traceln("[EVENT] Unknown event %d", event);
-    }
-}
-
-void GuLinux::WiFiManager::setup(Scheduler &scheduler, WiFiSettings *wifiSettings) {
-    Log.traceln(LOG_SCOPE "setup");
-    WiFi.onEvent(std::bind(&GuLinux::WiFiManager::onEvent, this, _1, _2));
+void GuLinux::WiFiManager::setup(WiFiSettings *wifiSettings) {
+    Log.traceln(LOG_SCOPE "setup: retries=%d, reconnectOnDisconnect=%s",
+            wifiSettings->retries(), wifiSettings->reconnectOnDisconnect() ? "true" : "false");
     this->wifiSettings = wifiSettings;
-    scheduler.addTask(rescanWiFiTask);
 
     WiFi.setHostname(wifiSettings->hostname());
     _status = Status::Connecting;
@@ -90,7 +28,13 @@ void GuLinux::WiFiManager::setup(Scheduler &scheduler, WiFiSettings *wifiSetting
             wifiMulti.addAP(station.essid, station.psk);
         }
     }
-    connect();
+    
+    wifiMulti.onConnected(std::bind(&WiFiManager::onConnected, this, _1));
+    wifiMulti.onFailure(std::bind(&WiFiManager::onFailure, this));
+    wifiMulti.onDisconnected(std::bind(&WiFiManager::onDisconnected, this, _1, _2));
+
+    reconnect();
+
     Log.infoln(LOG_SCOPE "setup finished");
 }
 
@@ -101,41 +45,48 @@ void GuLinux::WiFiManager::setApMode() {
         wifiSettings->apConfiguration().open() ? nullptr : wifiSettings->apConfiguration().psk);
 }
 
-void GuLinux::WiFiManager::connect() {
-    connectionFailed = false;
-    bool hasValidStations = wifiSettings->hasValidStations();
-    if(!hasValidStations) {
-        Log.warningln(LOG_SCOPE "No valid stations found");
-        setApMode();
-        if(onNoStationsFound) onNoStationsFound();
-        return;
-    }
-    WiFi.mode(WIFI_MODE_STA);
-    if( wifiMulti.run() != WL_CONNECTED) {
-        Log.warningln(LOG_SCOPE "Unable to connect to WiFi stations");
-        if(onConnectionFailed) onConnectionFailed();
-        setApMode();
-        connectionFailed = true;
-        rescanWiFiTask.enable();
-        return;
-    }
-    if(onConnected) onConnected();
+void GuLinux::WiFiManager::onConnected(const AsyncWiFiMulti::ApSettings &apSettings) {
     Log.infoln(LOG_SCOPE "Connected to WiFi `%s`, ip address: %s", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+    _status = Status::Station;
+    if(onConnectedCb) onConnectedCb(apSettings);
 }
 
-void GuLinux::WiFiManager::loop() {
-    if(scheduleReconnect) {
-        scheduleReconnect = false;
-        connect();
+void GuLinux::WiFiManager::onDisconnected(const char *ssid, uint8_t disconnectionReason) {
+    Log.warningln(LOG_SCOPE "onDisconnected: disconnected from WiFi station `%s`, reason: %d", ssid, disconnectionReason);
+    if(onDisconnectedCb) onDisconnectedCb(ssid, disconnectionReason);
+    if(wifiSettings->reconnectOnDisconnect()) {
+        Log.infoln(LOG_SCOPE "onDisconnected: reconnect enabled, reconnecting to WiFi stations");
+        reconnect();
     }
 }
 
-void GuLinux::WiFiManager::addOnConnectedListener(const OnConnectCallback &onConnected) {
-    onConnectedCallbacks.push_back(onConnected);
+void GuLinux::WiFiManager::onFailure() {
+    Log.warningln(LOG_SCOPE "Unable to connect to WiFi stations (%d/%d)",
+            ++retries, wifiSettings->retries());
+    if(retries < wifiSettings->retries() || wifiSettings->retries() < 0) {
+        Log.warningln(LOG_SCOPE "Retrying connection (%d/%d)", retries, wifiSettings->retries());
+        connect();
+    } else {
+        Log.warningln(LOG_SCOPE "Max retries reached, switching to Access Point mode");
+        setApMode();
+        _status = Status::AccessPoint;
+    }
+    if(onFailureCb) onFailureCb();
+}
+void GuLinux::WiFiManager::reconnect()
+{
+    Log.infoln(LOG_SCOPE "reconnect: status=%s", statusAsString());
+    this->retries = 0;
+    connect();
 }
 
-const char *GuLinux::WiFiManager::statusAsString() const
+void GuLinux::WiFiManager::connect()
 {
+    _status = Status::Connecting;
+    wifiMulti.start();
+}
+
+const char *GuLinux::WiFiManager::statusAsString() const {
     switch (_status) {
     case Status::AccessPoint:
         return "AccessPoint";
@@ -191,6 +142,8 @@ void GuLinux::WiFiManager::onGetConfig(JsonObject responseObject) {
         responseObject["stations"][i]["essid"] = station.essid;
         responseObject["stations"][i]["psk"] = station.psk;
     }
+    responseObject["retries"] = wifiSettings->retries();
+    responseObject["reconnectOnDisconnect"] = wifiSettings->reconnectOnDisconnect();
 }
 
 void GuLinux::WiFiManager::onGetWiFiStatus(AsyncWebServerRequest *request) {
@@ -238,6 +191,34 @@ void GuLinux::WiFiManager::onConfigAccessPoint(Validation &validation) {
 
 void GuLinux::WiFiManager::onDeleteAccessPoint() {
     wifiSettings->setAPConfiguration("", "");
+}
+
+void GuLinux::WiFiManager::onConfigWiFiManagerSettings(AsyncWebServerRequest *request, JsonVariant &json) {
+    WebValidation validation{request, json};
+
+    if(request->method() == HTTP_POST) {
+        onConfigWiFiManagerSettings(validation);
+    }
+    onGetConfig(request);
+}
+
+void GuLinux::WiFiManager::onConfigWiFiManagerSettings(Validation &validation) {
+    validation
+        .required<int16_t>("retries")
+        .range("retries", {-1}, {std::numeric_limits<int16_t>::max()})
+        .ifValid([this](JsonVariant json) {
+            int16_t retries = json["retries"];
+            Log.traceln(LOG_SCOPE "onConfigWiFiManagerSettings: retries=%d", retries);
+            wifiSettings->setRetries(retries);
+        });
+
+    validation
+        .required<bool>("reconnectOnDisconnect")
+        .ifValid([this](JsonVariant json) {
+            bool reconnectOnDisconnect = json["reconnectOnDisconnect"];
+            Log.traceln(LOG_SCOPE "onConfigWiFiManagerSettings: reconnectOnDisconnect=%d", reconnectOnDisconnect);
+            wifiSettings->setReconnectOnDisconnect(reconnectOnDisconnect);
+        });
 }
 
 void GuLinux::WiFiManager::onConfigStation(AsyncWebServerRequest *request, JsonVariant &json) {

@@ -14,6 +14,14 @@
 #define WIFIMANAGER_MAX_STATIONS 5
 #endif
 
+#ifndef WIFIMANAGER_DEFAULT_RETRIES
+#define WIFIMANAGER_DEFAULT_RETRIES 2
+#endif
+
+#ifndef WIFIMANAGER_DEFAULT_RECONNECT
+#define WIFIMANAGER_DEFAULT_RECONNECT false
+#endif
+
 namespace GuLinux {
 class WiFiSettings {
 public:
@@ -31,14 +39,25 @@ public:
     void loadDefaults();
     void save();
 
-    void setAPConfiguration(const char *essid, const char *psk);
-    void setStationConfiguration(uint8_t index, const char *essid, const char *psk);
-    const char *hostname() const;
     WiFiStation apConfiguration() const { return _apConfiguration; }
+    const char *hostname() const;
+    void setAPConfiguration(const char *essid, const char *psk);
+
     WiFiStation station(uint8_t index) const { return _stations[index]; }
+    std::array<WiFiStation, WIFIMANAGER_MAX_STATIONS> stations() const { return _stations; }
+    void setStationConfiguration(uint8_t index, const char *essid, const char *psk);
+    
+    
+    
+    
     bool hasStation(const String &essid) const;
     bool hasValidStations() const;
-    std::array<WiFiStation, WIFIMANAGER_MAX_STATIONS> stations() const { return _stations; }
+
+    int16_t retries() const;
+    void setRetries(int16_t retries);
+
+    bool reconnectOnDisconnect() const;
+    void setReconnectOnDisconnect(bool reconnectOnDisconnect);
 private:
     Preferences &preferences;
     FS &fs;
@@ -48,6 +67,8 @@ private:
     WiFiStation _apConfiguration;
     
     void loadDefaultStations();
+    int16_t _retries = WIFIMANAGER_DEFAULT_RETRIES;
+    bool _reconnectOnDisconnect = WIFIMANAGER_DEFAULT_RECONNECT;
     
 };
 }
