@@ -52,17 +52,19 @@ void GuLinux::WiFiManager::onConnected(const AsyncWiFiMulti::ApSettings &apSetti
 }
 
 void GuLinux::WiFiManager::onDisconnected(const char *ssid, uint8_t disconnectionReason) {
-    Log.warningln(LOG_SCOPE "Disconnected from WiFi station `%s`, reason: %d", ssid, disconnectionReason);
+    Log.warningln(LOG_SCOPE "onDisconnected: disconnected from WiFi station `%s`, reason: %d", ssid, disconnectionReason);
     if(onDisconnectedCb) onDisconnectedCb(ssid, disconnectionReason);
     if(wifiSettings->reconnectOnDisconnect()) {
+        Log.infoln(LOG_SCOPE "onDisconnected: reconnect enabled, reconnecting to WiFi stations");
         reconnect();
     }
 }
 
 void GuLinux::WiFiManager::onFailure() {
-    Log.warningln(LOG_SCOPE "Unable to connect to WiFi stations");
+    Log.warningln(LOG_SCOPE "Unable to connect to WiFi stations (%d/%d)",
+            ++retries, wifiSettings->retries());
     if(retries < wifiSettings->retries() || wifiSettings->retries() < 0) {
-        Log.warningln(LOG_SCOPE "Retrying connection (%d/%d)", retries++, wifiSettings->retries());
+        Log.warningln(LOG_SCOPE "Retrying connection (%d/%d)", retries, wifiSettings->retries());
         connect();
     } else {
         Log.warningln(LOG_SCOPE "Max retries reached, switching to Access Point mode");
@@ -73,15 +75,16 @@ void GuLinux::WiFiManager::onFailure() {
 }
 void GuLinux::WiFiManager::reconnect()
 {
+    Log.infoln(LOG_SCOPE "reconnect: status=%s", statusAsString());
     this->retries = 0;
     connect();
 }
-void GuLinux::WiFiManager::connect() {
+
+void GuLinux::WiFiManager::connect()
+{
     _status = Status::Connecting;
     wifiMulti.start();
 }
-
- 
 
 const char *GuLinux::WiFiManager::statusAsString() const {
     switch (_status) {
