@@ -61,6 +61,10 @@ void GuLinux::WiFiManager::onDisconnected(const char *ssid, uint8_t disconnectio
 }
 
 void GuLinux::WiFiManager::onFailure() {
+    if(_status != Status::Connecting) {
+        Log.warningln(LOG_SCOPE "onFailure: not in connecting state, current status: %s", statusAsString());
+        return;
+    }
     Log.warningln(LOG_SCOPE "Unable to connect to WiFi stations (%d/%d)",
             ++retries, wifiSettings->retries());
     if(retries < wifiSettings->retries() || wifiSettings->retries() < 0) {
@@ -78,6 +82,14 @@ void GuLinux::WiFiManager::reconnect()
     Log.infoln(LOG_SCOPE "reconnect: status=%s", statusAsString());
     this->retries = 0;
     connect();
+}
+
+void GuLinux::WiFiManager::rescan() {
+    if(_status == Connecting) {
+        Log.warningln(LOG_SCOPE "rescan: cannot rescan while connecting, current status: %s", statusAsString());
+        return;
+    }
+    wifiMulti.rescan();
 }
 
 void GuLinux::WiFiManager::connect()

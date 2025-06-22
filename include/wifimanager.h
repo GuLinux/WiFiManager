@@ -23,6 +23,7 @@ public:
     void setup(WiFiSettings *wifiSettings);
     
     void reconnect();
+    void rescan();
     Status status() const { return _status; }
     const char *statusAsString() const;
     String essid() const;
