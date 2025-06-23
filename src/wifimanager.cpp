@@ -72,9 +72,11 @@ void GuLinux::WiFiManager::onFailure() {
         connect();
     } else {
         Log.warningln(LOG_SCOPE "Max retries reached, switching to Access Point mode");
-        setApMode();
-        _status = Status::AccessPoint;
-    }
+        _loopCallbacks.push([this]() {
+            setApMode();
+            _status = Status::AccessPoint;
+        });
+   }
     if(onFailureCb) onFailureCb();
 }
 void GuLinux::WiFiManager::reconnect()
@@ -266,4 +268,15 @@ void GuLinux::WiFiManager::onDeleteStation(Validation &validation) {
             int stationIndex = json["index"];
             wifiSettings->setStationConfiguration(stationIndex, "", "");
         });
+}
+
+
+void GuLinux::WiFiManager::loop() {
+    while(!_loopCallbacks.empty()) {
+        auto callback = _loopCallbacks.front();
+        _loopCallbacks.pop();
+        if(callback) {
+            callback();
+        }
+    }
 }

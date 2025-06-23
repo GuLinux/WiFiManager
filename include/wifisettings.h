@@ -69,7 +69,6 @@ private:
     void loadDefaultStations();
     int16_t _retries = WIFIMANAGER_DEFAULT_RETRIES;
     bool _reconnectOnDisconnect = WIFIMANAGER_DEFAULT_RECONNECT;
-    
 };
 }
 #endif

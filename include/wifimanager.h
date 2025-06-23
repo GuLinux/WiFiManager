@@ -8,6 +8,8 @@
 #include "wifisettings.h"
 #include <validation.h>
 
+#include <queue>
+
 #ifndef WIFIMANAGER_MAX_STATIONS
 #define WIFIMANAGER_MAX_STATIONS
 #endif
@@ -53,6 +55,8 @@ public:
     void setOnConnectedCallback(const AsyncWiFiMulti::OnConnected &callback) { this->onConnectedCb = callback; }
     void setOnConnectionFailedCallback(const AsyncWiFiMulti::OnFailure &callback) { this->onFailureCb = callback; }
     void setOnDisconnectedCallback(const AsyncWiFiMulti::OnDisconnected &callback) { this->onDisconnectedCb = callback; }
+
+    void loop();
 private:
     GuLinux::WiFiSettings *wifiSettings;
     AsyncWiFiMulti wifiMulti;
@@ -69,6 +73,8 @@ private:
 
     void setApMode();
     uint8_t retries = 0;
+    
+    std::queue<std::function<void()>> _loopCallbacks;
 };
 }
 #endif
