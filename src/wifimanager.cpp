@@ -47,6 +47,8 @@ void GuLinux::WiFiManager::setApMode() {
 
 void GuLinux::WiFiManager::onConnected(const AsyncWiFiMulti::ApSettings &apSettings) {
     Log.infoln(LOG_SCOPE "Connected to WiFi `%s`, ip address: %s", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+    WiFi.softAPdisconnect(false);
+    WiFi.mode(WIFI_STA);
     _status = Status::Station;
     if(onConnectedCb) onConnectedCb(apSettings);
 }
