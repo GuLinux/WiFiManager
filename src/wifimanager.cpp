@@ -1,7 +1,7 @@
 #include "wifimanager.h"
 #include <ArduinoLog.h>
 #include <WiFi.h>
-#include <jsonresponse.h>
+#include <jsonwebresponse.h>
 #include <webvalidation.h>
 
 #define LOG_SCOPE "WiFiManager:"
@@ -21,7 +21,7 @@ void GuLinux::WiFiManager::setup(WiFiSettings *wifiSettings) {
 
     WiFi.setHostname(wifiSettings->hostname());
     _status = Status::Connecting;
-    for(uint8_t i=0; i<WIFIMANAGER_MAX_STATIONS; i++) {
+    for(uint8_t i=0; i<wifiSettings->stations().size(); i++) {
         auto station = wifiSettings->station(i);
         if(station) {
             Log.infoln(LOG_SCOPE "found valid station: %s", station.essid);
@@ -145,7 +145,7 @@ String GuLinux::WiFiManager::gateway() const {
 }
 
 void GuLinux::WiFiManager::onGetConfig(AsyncWebServerRequest *request) {
-    JsonResponse response(request);
+    JsonWebResponse response(request);
     auto rootObject = response.root().to<JsonObject>();
     onGetConfig(rootObject);
 }
@@ -153,7 +153,7 @@ void GuLinux::WiFiManager::onGetConfig(AsyncWebServerRequest *request) {
 void GuLinux::WiFiManager::onGetConfig(JsonObject responseObject) {
     responseObject["accessPoint"]["essid"] = wifiSettings->apConfiguration().essid;
     responseObject["accessPoint"]["psk"] = wifiSettings->apConfiguration().psk;
-    for(uint8_t i=0; i<WIFIMANAGER_MAX_STATIONS; i++) {
+    for(uint8_t i=0; i<wifiSettings->stations().size(); i++) {
         auto station = wifiSettings->station(i);
         responseObject["stations"][i]["essid"] = station.essid;
         responseObject["stations"][i]["psk"] = station.psk;
@@ -163,7 +163,7 @@ void GuLinux::WiFiManager::onGetConfig(JsonObject responseObject) {
 }
 
 void GuLinux::WiFiManager::onGetWiFiStatus(AsyncWebServerRequest *request) {
-    JsonResponse response(request);
+    JsonWebResponse response(request);
     auto rootObject = response.root().to<JsonObject>();
     onGetWiFiStatus(rootObject);
 }
@@ -252,7 +252,7 @@ void GuLinux::WiFiManager::onConfigStation(AsyncWebServerRequest *request, JsonV
 void GuLinux::WiFiManager::onConfigStation(Validation &validation) {
     validation
         .required<int>("index")
-        .range("index", {0}, {WIFIMANAGER_MAX_STATIONS-1})
+        .range("index", {0}, {wifiSettings->stations().size()-1})
         .required<const char*>({"essid", "psk"}).notEmpty("essid")
         .ifValid([this](JsonVariant json){
             int stationIndex = json["index"];
@@ -265,7 +265,7 @@ void GuLinux::WiFiManager::onConfigStation(Validation &validation) {
 void GuLinux::WiFiManager::onDeleteStation(Validation &validation) {
     validation
         .required<int>("index")
-        .range("index", {0}, {WIFIMANAGER_MAX_STATIONS-1})
+        .range("index", {0}, {wifiSettings->stations().size()-1})
         .ifValid([this](JsonVariant json){
             int stationIndex = json["index"];
             wifiSettings->setStationConfiguration(stationIndex, "", "");

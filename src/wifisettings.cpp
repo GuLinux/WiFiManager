@@ -21,8 +21,12 @@ void runOnFormatKey(const char *format, uint16_t index, std::function<void(const
 }
 
 
-GuLinux::WiFiSettings::WiFiSettings(Preferences &preferences, FS &fs, const char *defaultHostname, bool appendMacSuffix)
-    : preferences{preferences}, fs{fs}, defaultHostname{defaultHostname}, appendMacSuffix{appendMacSuffix} {
+GuLinux::WiFiSettings::WiFiSettings(Preferences &preferences, FS &fs, const char *defaultHostname, bool appendMacSuffix, uint16_t maxStations, bool reconnectByDefault, uint16_t defaultRetries)
+    : preferences{preferences}, fs{fs}, defaultHostname{defaultHostname}, appendMacSuffix{appendMacSuffix}, reconnectByDefault{reconnectByDefault}, defaultRetries{defaultRetries} {
+        if(maxStations) {
+            _stations.reserve(maxStations);
+            _stations.resize(maxStations);
+        }
 }
 
 void GuLinux::WiFiSettings::setup() {
@@ -47,7 +51,7 @@ void GuLinux::WiFiSettings::load() {
     } else {
         loadDefaults();
     }
-    for(uint8_t i=0; i<WIFIMANAGER_MAX_STATIONS; i++) {
+    for(uint8_t i=0; i<_stations.size(); i++) {
         runOnFormatKey(WIFIMANAGER_KEY_STATION_X_ESSID, i, [this, i](const char *key) { preferences.getString(key, _stations[i].essid, WIFIMANAGER_MAX_ESSID_PSK_SIZE); });
         runOnFormatKey(WIFIMANAGER_KEY_STATION_X_PSK, i, [this, i](const char *key) { preferences.getString(key, _stations[i].psk, WIFIMANAGER_MAX_ESSID_PSK_SIZE); });
         // Log.traceln(LOG_SCOPE "Station %d: essid=`%s`, psk=`%s`", i, _stations[i].essid, _stations[i].psk);
@@ -56,8 +60,8 @@ void GuLinux::WiFiSettings::load() {
     if(std::none_of(_stations.begin(), _stations.end(), std::bind(&WiFiStation::valid, _1))) {
         loadDefaultStations();
     }
-    _retries = preferences.getInt(RETRIES_KEY, WIFIMANAGER_DEFAULT_RETRIES);
-    _reconnectOnDisconnect = preferences.getBool(RECONNECT_ON_DISCONNECT_KEY, WIFIMANAGER_DEFAULT_RECONNECT);
+    _retries = preferences.getInt(RETRIES_KEY, defaultRetries);
+    _reconnectOnDisconnect = preferences.getBool(RECONNECT_ON_DISCONNECT_KEY, reconnectByDefault);
 }
 
 void GuLinux::WiFiSettings::loadDefaults() {
@@ -72,8 +76,8 @@ void GuLinux::WiFiSettings::loadDefaults() {
     }
     memset(_apConfiguration.psk, 0, WIFIMANAGER_MAX_ESSID_PSK_SIZE);
     // Log.traceln(LOG_SCOPE "Using default ESSID: `%s`", _apConfiguration.essid);
-    _retries = WIFIMANAGER_DEFAULT_RETRIES;
-    _reconnectOnDisconnect = WIFIMANAGER_DEFAULT_RECONNECT;
+    _retries = defaultRetries;
+    _reconnectOnDisconnect = reconnectByDefault;
     loadDefaultStations();
 }
 
@@ -90,7 +94,7 @@ void GuLinux::WiFiSettings::loadDefaultStations() {
         wifiJson.close();
         JsonArray stations = doc.as<JsonArray>();
         // Log.infoln("Found valid /wifi.json settings file, loading default wifi settings with %d stations", stations.size());
-        for(int i=0; i<stations.size() && i<WIFIMANAGER_MAX_STATIONS; i++) {
+        for(int i=0; i<stations.size() && i<_stations.size(); i++) {
             String ssid = stations[i]["ssid"];
             String psk = stations[i]["psk"];
             // Log.infoln("Adding station: %s", ssid);
@@ -108,7 +112,7 @@ void GuLinux::WiFiSettings::save() {
     preferences.putString(WIFIMANAGER_KEY_AP_ESSID, _apConfiguration.essid);
     preferences.putString(WIFIMANAGER_KEY_AP_PSK, _apConfiguration.psk);
 
-    for(uint8_t i=0; i<WIFIMANAGER_MAX_STATIONS; i++) {
+    for(uint8_t i=0; i<_stations.size(); i++) {
         runOnFormatKey(WIFIMANAGER_KEY_STATION_X_ESSID, i, [this, i](const char *key) { preferences.putString(key, _stations[i].essid); });
         runOnFormatKey(WIFIMANAGER_KEY_STATION_X_PSK, i, [this, i](const char *key) { preferences.putString(key, _stations[i].psk); });
     }

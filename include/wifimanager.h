@@ -10,9 +10,6 @@
 
 #include <queue>
 
-#ifndef WIFIMANAGER_MAX_STATIONS
-#define WIFIMANAGER_MAX_STATIONS
-#endif
 
 
 namespace GuLinux {

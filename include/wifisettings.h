@@ -1,25 +1,13 @@
 #ifndef GULINUX_WIFI_SETTINGS
 #define GULINUX_WIFI_SETTINGS
 
-#include <array>
+#include <vector>
 #include <Preferences.h>
 #include <WString.h>
 #include <FS.h>
 
 #ifndef WIFIMANAGER_MAX_ESSID_PSK_SIZE
 #define WIFIMANAGER_MAX_ESSID_PSK_SIZE 256
-#endif
-
-#ifndef WIFIMANAGER_MAX_STATIONS
-#define WIFIMANAGER_MAX_STATIONS 5
-#endif
-
-#ifndef WIFIMANAGER_DEFAULT_RETRIES
-#define WIFIMANAGER_DEFAULT_RETRIES 2
-#endif
-
-#ifndef WIFIMANAGER_DEFAULT_RECONNECT
-#define WIFIMANAGER_DEFAULT_RECONNECT false
 #endif
 
 namespace GuLinux {
@@ -33,7 +21,7 @@ public:
         bool empty() const;
         bool open() const;
     };
-    WiFiSettings(Preferences &preferences, FS &fs, const char *defaultHostname="ESP32", bool appendMacSuffix=true);
+    WiFiSettings(Preferences &preferences, FS &fs, const char *defaultHostname="ESP32", bool appendMacSuffix=true, uint16_t maxStations=5, bool reconnectByDefault=false, uint16_t defaultRetries=2);
     void setup();
     void load();
     void loadDefaults();
@@ -44,7 +32,7 @@ public:
     void setAPConfiguration(const char *essid, const char *psk);
 
     WiFiStation station(uint8_t index) const { return _stations[index]; }
-    std::array<WiFiStation, WIFIMANAGER_MAX_STATIONS> stations() const { return _stations; }
+    std::vector<WiFiStation> stations() const { return _stations; }
     void setStationConfiguration(uint8_t index, const char *essid, const char *psk);
     
     
@@ -63,12 +51,14 @@ private:
     FS &fs;
     const char *defaultHostname;
     bool appendMacSuffix;
-    std::array<WiFiStation, WIFIMANAGER_MAX_STATIONS> _stations;
+    std::vector<WiFiStation> _stations;
     WiFiStation _apConfiguration;
     
     void loadDefaultStations();
-    int16_t _retries = WIFIMANAGER_DEFAULT_RETRIES;
-    bool _reconnectOnDisconnect = WIFIMANAGER_DEFAULT_RECONNECT;
+    int16_t _retries;
+    bool _reconnectOnDisconnect;
+    const bool reconnectByDefault;
+    const uint16_t defaultRetries;
 };
 }
 #endif
